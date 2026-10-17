@@ -27,7 +27,7 @@ extra_buttons:
     # icon: 'minecraft:item/red_bed' # optional; defaults to the target guide icon
 ```
 
-Targets must be canonical `/docs/.../` paths. Extra buttons appear before ordinary article links, replacing duplicate links to the same target. They also appear on the corresponding category dialog (including the main handbook). Missing targets are skipped. Older feeds without this field continue to work.
+Targets must be canonical `/docs/.../` paths. Extra buttons appear before ordinary article links, replacing duplicate links to the same target. They also appear on the corresponding category dialog. The main menu keeps a Player handbook button; its text and extra buttons appear together when opened. Missing targets are skipped. Older feeds without this field continue to work.
 
 ## Audience-specific content
 

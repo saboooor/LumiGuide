@@ -100,7 +100,8 @@ public final class LumiGuide extends JavaPlugin {
         Runnable current = () -> category(p, title, nodes, overview, back);
         List<Button> buttons = new ArrayList<>();
         Set<String> extraTargets = new HashSet<>();
-        var overviewPage = feed.page(overview == null ? "/docs/" : overview);
+        // The root handbook keeps its extra buttons inside its article, reached from the menu.
+        var overviewPage = overview == null ? null : feed.page(overview);
         if (overviewPage != null && overviewPage.extra_buttons() != null) {
             for (var extra : feed.buttons(overviewPage)) {
                 if (overviewPage.extra_buttons().stream().anyMatch(item -> item.href().equals(extra.target().path()))) {
