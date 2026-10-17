@@ -8,17 +8,36 @@ Paper handbook plugin using native Java dialogs and optional Floodgate/Cumulus B
 2. Deploy the new `src/routes/api/docs/index.ts` endpoint in `../Luminara/website` using the website's normal deployment process.
 3. Start the server. Configure `plugins/LumiGuide/config.yml` if your website uses a different URL.
 
-`/guide` (aliases `/docs`, `/lumiguide`) opens categories. `/guide <words>` searches titles, descriptions, keywords, and paths; `/guide travel/waystones` opens a guide directly. The main handbook, category, and results dialogs include a search field: enter a query and press Search. Results retain the query for editing. Back buttons return to the previous category, search results, article, or related-guide list; the main handbook has no Back button. Bedrock combines the field with an Action dropdown; select Search or a guide and press Submit. Java buttons use vanilla Minecraft item sprites, matching Lumistones, with the appropriate atlas for the server version. Bedrock forms retain plain text labels, as in Lumistones. Guide and category icons come from each page’s `icon` metadata in the API feed; missing or invalid identifiers fall back to paper. Articles display their full content in a single scrollable view, with related-guide links and category overviews. Categories, search results, and related guides show all entries without pagination. Markdown headings, bold, italics, strikethrough, colored monospace code, numbered and nested lists, blockquotes, links, and image descriptions are rendered in-game. Tables use labeled rows to fit narrow screens. Java links have hover details and HTTP(S) links can open in the browser; internal links are available through Related guides. Bedrock retains colors, bold, and italics; its forms do not support clickable text, custom fonts, underline, or strikethrough. HTML is omitted. External links are displayed as text and commands are never executed from Markdown.
+`/guide` (aliases `/docs`, `/lumiguide`) opens categories. `/guide <words>` searches titles, descriptions, keywords, and paths; `/guide travel/waystones` opens a guide directly. The main handbook, category, and results dialogs include a search field: enter a query and press Search. Results retain the query for editing. Back buttons return to the previous category, search results, or article; the main handbook has no Back button. Bedrock combines the field with an Action dropdown; select Search or a guide and press Submit. Java buttons use vanilla Minecraft item sprites, matching Lumistones, with the appropriate atlas for the server version. Bedrock forms retain plain text labels, as in Lumistones. Guide and category icons come from each page’s `icon` metadata in the API feed; missing or invalid identifiers fall back to paper. Articles display their full content in scrollable dialogs on Java and forms on Bedrock. Linked guides appear as individual buttons with their icons and titles; Back returns to the source article. Categories and search results show all entries without pagination. Markdown headings, bold, italics, strikethrough, colored monospace code, numbered and nested lists, blockquotes, links, and image descriptions are rendered in-game. Tables use labeled rows to fit narrow screens. Java links have hover details and HTTP(S) links can open in the browser; internal links have corresponding guide buttons below the article. Bedrock retains colors, bold, and italics; its forms do not support clickable text, custom fonts, underline, or strikethrough. HTML is omitted. External links are displayed as text and commands are never executed from Markdown.
 
 `/guide reload` reloads configuration and refreshes the feed. `lumiguide.use` defaults to everyone; `lumiguide.reload` defaults to operators. Docs refresh every ten minutes by default. Requests run asynchronously with size limits and HTTP timeouts. A failed request preserves the last valid feed, including across restarts via `handbook.json`. A first start requires a successful website response.
 
 ## Website contract
 
-`GET /api/docs/` returns `{ "version": 1, "menu": [...], "pages": [...] }`. Each menu node has `text`, optional `href`, and optional nested `items`. Each page contains `path` (canonical `/docs/.../`), `title`, optional `description`, `keywords`, and `icon`, and `markdown` without YAML frontmatter. The endpoint bundles existing website Markdown at build time and shares the website's metadata and menu builder; docs updates become available after website deployment. No filesystem paths or remote fetch targets come from API request parameters.
+`GET /api/docs/` returns `{ "version": 1, "menu": [...], "pages": [...] }`. Each menu node has `text`, optional `href`, and optional nested `items`. Each page contains `path` (canonical `/docs/.../`), `title`, optional `description`, `keywords`, `icon`, and `extra_buttons`, and `markdown` without YAML frontmatter. The endpoint bundles existing website Markdown at build time and shares the website's metadata and menu builder; docs updates become available after website deployment. No filesystem paths or remote fetch targets come from API request parameters.
 
 Set an item sprite in each Markdown file’s YAML frontmatter, for example `icon: 'minecraft:item/ender_pearl'`. The website passes this field through `/api/docs/`; guide, category, search, and related-guide buttons use it after the feed refreshes. Use vanilla item texture names (for example `minecraft:item/compass_16` for a compass), rather than material names. Redeploy the website and run `/guide reload` to refresh immediately. No plugin rebuild is needed for future icon metadata changes.
 
+Add optional `extra_buttons` in a guide’s frontmatter to create direct Minecraft navigation buttons, including from website-only content:
+
+```yaml
+extra_buttons:
+  - label: 'Get home or meet a friend'
+    href: '/docs/travel/homes-and-requests/'
+    # icon: 'minecraft:item/red_bed' # optional; defaults to the target guide icon
+```
+
+Targets must be canonical `/docs/.../` paths. Extra buttons appear before ordinary article links, replacing duplicate links to the same target. They also appear on the corresponding category dialog (including the main handbook). Missing targets are skipped. Older feeds without this field continue to work.
+
 ## Audience-specific content
+
+Set a file-wide audience in YAML frontmatter to restrict an entire guide:
+
+```yaml
+audience: website # or minecraft; omitted / both includes both audiences
+```
+
+Website-only guides are excluded from Minecraft pages, search, category menus, and extra button targets. Minecraft-only guides are excluded from website navigation and return 404 when opened on the website. Joining instructions are website-only because in-game readers are already connected.
 
 Unmarked Markdown appears on both the website and in Minecraft. Wrap standalone blocks with audience comments to show them in only one place:
 

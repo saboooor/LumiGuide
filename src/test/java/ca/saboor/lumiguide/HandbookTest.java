@@ -22,8 +22,21 @@ class HandbookTest {
     @Test void findsRelatedGuidesAndDeduplicatesAnchors() {
         assertEquals(List.of("/docs/travel/"), Handbook.links("[A](/docs/travel/#a) [B](/docs/travel) [C](https://example.org)"));
     }
+    @Test void extraButtonsOverrideLinkLabelsAndInheritTargetIcons() {
+        var target = new Handbook.Page("/docs/travel/", "Travel", null, null, "Read", "minecraft:item/ender_pearl", null);
+        var source = new Handbook.Page("/docs/", "Handbook", null, null, "[Travel](/docs/travel/)", null,
+            List.of(new Handbook.ExtraButton("Get home or meet a friend", target.path(), null)));
+        var feed = new Handbook.Feed(1, List.of(), List.of(source, target)).checked();
+        var buttons = feed.buttons(source);
+        assertEquals(1, buttons.size());
+        assertEquals("Get home or meet a friend", buttons.getFirst().label());
+        assertEquals(target.sprite(), buttons.getFirst().icon());
+        var bad = new Handbook.Page("/docs/", "Handbook", null, null, "", null,
+            List.of(new Handbook.ExtraButton("Unsafe", "https://example.org/", null)));
+        assertThrows(IllegalArgumentException.class, () -> new Handbook.Feed(1, List.of(), List.of(bad)).checked());
+    }
     @Test void validatesFeedAndMatchesAllSearchTerms() {
-        var p = new Handbook.Page("/docs/travel/", "Travel", "Waystones", "teleport XP", "Read", null);
+        var p = new Handbook.Page("/docs/travel/", "Travel", "Waystones", "teleport XP", "Read", null, null);
         var feed = new Handbook.Feed(1, List.of(), List.of(p)).checked();
         assertEquals(List.of(p), feed.search("WAYSTONES xp"));
         assertTrue(feed.search("waystones money").isEmpty());

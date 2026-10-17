@@ -98,7 +98,7 @@ final class Markdown {
             }
         } else if (node instanceof Link n) {
             Style link = style.color(NamedTextColor.BLUE).decorate(TextDecoration.UNDERLINED)
-                .hoverEvent(HoverEvent.showText(Component.text(n.getDestination().startsWith("/docs/") ? "Open Related guides to follow this link" : n.getDestination())));
+                .hoverEvent(HoverEvent.showText(Component.text(n.getDestination().startsWith("/docs/") ? "Use the guide button below to follow this link" : n.getDestination())));
             try {
                 URI uri = URI.create(n.getDestination());
                 if (("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme())) && uri.getHost() != null)

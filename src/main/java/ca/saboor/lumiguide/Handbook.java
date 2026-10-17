@@ -5,10 +5,12 @@ import org.commonmark.node.*;
 import org.commonmark.parser.Parser;
 
 final class Handbook {
-    record Page(String path, String title, String description, String keywords, String markdown, String icon) {
+    record Page(String path, String title, String description, String keywords, String markdown, String icon, List<ExtraButton> extra_buttons) {
         net.kyori.adventure.key.Key sprite() { return ButtonIcon.guideSprite(icon); }
         net.kyori.adventure.text.Component content() { return Markdown.render(markdown); }
     }
+    record ExtraButton(String label, String href, String icon) {}
+    record GuideButton(String label, Page target, net.kyori.adventure.key.Key icon) {}
     record Menu(String text, String href, List<Menu> items) {}
     record Feed(int version, List<Menu> menu, List<Page> pages) {
         Feed checked() {
@@ -20,9 +22,33 @@ final class Handbook {
                         || p.title == null || p.title.isBlank() || p.markdown == null || p.markdown.length() > 500000)
                     throw new IllegalArgumentException("Invalid handbook page");
             }
+            for (Page p : pages) if (p.extra_buttons != null) {
+                if (p.extra_buttons.size() > 100) throw new IllegalArgumentException("Too many extra buttons");
+                for (ExtraButton button : p.extra_buttons) {
+                    if (button == null || button.label == null || button.label.isBlank() || button.label.length() > 100
+                            || button.href == null || !button.href.matches("/docs/(?:[a-z0-9-]+/)*"))
+                        throw new IllegalArgumentException("Invalid extra guide button");
+                }
+            }
             return this;
         }
         Page page(String path) { return pages.stream().filter(p -> p.path.equals(path)).findFirst().orElse(null); }
+        List<GuideButton> buttons(Page source) {
+            if (source == null) return List.of();
+            List<GuideButton> buttons = new ArrayList<>();
+            Set<String> seen = new HashSet<>();
+            if (source.extra_buttons != null) for (ExtraButton extra : source.extra_buttons) {
+                Page target = page(extra.href);
+                if (target != null && !target.path.equals(source.path) && seen.add(target.path))
+                    buttons.add(new GuideButton(extra.label, target, extra.icon == null ? target.sprite() : ButtonIcon.guideSprite(extra.icon)));
+            }
+            for (String path : links(source.markdown)) {
+                Page target = page(path);
+                if (target != null && !target.path.equals(source.path) && seen.add(target.path))
+                    buttons.add(new GuideButton(target.title, target, target.sprite()));
+            }
+            return List.copyOf(buttons);
+        }
         List<Page> search(String query) {
             String[] terms = query.toLowerCase(Locale.ROOT).trim().split("\\s+");
             return pages.stream().filter(p -> Arrays.stream(terms).allMatch(t ->

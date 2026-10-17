@@ -99,10 +99,20 @@ public final class LumiGuide extends JavaPlugin {
     private void category(Player p, String title, List<Handbook.Menu> nodes, String overview, Runnable back) {
         Runnable current = () -> category(p, title, nodes, overview, back);
         List<Button> buttons = new ArrayList<>();
+        Set<String> extraTargets = new HashSet<>();
+        var overviewPage = feed.page(overview == null ? "/docs/" : overview);
+        if (overviewPage != null && overviewPage.extra_buttons() != null) {
+            for (var extra : feed.buttons(overviewPage)) {
+                if (overviewPage.extra_buttons().stream().anyMatch(item -> item.href().equals(extra.target().path()))) {
+                    extraTargets.add(extra.target().path());
+                    buttons.add(new Button(extra.icon(), extra.label(), () -> article(p, extra.target().path(), current)));
+                }
+            }
+        }
         if (overview != null && feed.page(overview) != null) buttons.add(new Button(feed.page(overview).sprite(), "Overview", () -> article(p, overview, current)));
         for (var n : nodes) {
             if (n.items() != null && !n.items().isEmpty()) buttons.add(new Button(feed.page(n.href()) == null ? ButtonIcon.CATEGORY.sprite : feed.page(n.href()).sprite(), n.text(), () -> category(p, n.text(), n.items(), n.href(), current)));
-            else if (feed.page(n.href()) != null) buttons.add(new Button(feed.page(n.href()).sprite(), n.text(), () -> article(p, n.href(), current)));
+            else if (feed.page(n.href()) != null && !extraTargets.contains(n.href())) buttons.add(new Button(feed.page(n.href()).sprite(), n.text(), () -> article(p, n.href(), current)));
         }
         if (back != null) buttons.add(new Button(ButtonIcon.BACK, "Back", back));
         if (back != null) buttons.add(new Button(ButtonIcon.HANDBOOK, "Handbook", () -> home(p)));
@@ -125,21 +135,14 @@ public final class LumiGuide extends JavaPlugin {
         if (page == null) { home(p); return; }
         Runnable current = () -> article(p, path, back);
         List<Button> buttons = new ArrayList<>();
-        buttons.add(new Button(ButtonIcon.RELATED, "Related guides", () -> related(p, page, current)));
+        for (var link : feed.buttons(page))
+            buttons.add(new Button(link.icon(), link.label(), () -> article(p, link.target().path(), current)));
         String parent = path.substring(0, Math.max(0, path.lastIndexOf('/', path.length() - 2)) + 1);
         if (feed.page(parent) != null && !parent.equals(path)) buttons.add(new Button(feed.page(parent).sprite(), "Category overview", () -> article(p, parent, current)));
         buttons.add(new Button(ButtonIcon.BACK, "Back", back));
         buttons.add(new Button(ButtonIcon.HANDBOOK, "Handbook", () -> home(p)));
         buttons.add(new Button(ButtonIcon.SEARCH, "Search", () -> home(p)));
         show(p, page.title(), page.content(), buttons);
-    }
-    private void related(Player p, Handbook.Page page, Runnable back) {
-        Runnable current = () -> related(p, page, back);
-        List<Button> buttons = new ArrayList<>(Handbook.links(page.markdown()).stream().map(feed::page).filter(Objects::nonNull)
-            .map(target -> new Button(target.sprite(), target.title(), () -> article(p, target.path(), current))).toList());
-        boolean empty = buttons.isEmpty();
-        buttons.add(new Button(ButtonIcon.BACK, "Back to article", back));
-        show(p, "Related guides", empty ? "This article has no linked guides." : "Follow a link from this article.", buttons);
     }
     private void show(Player p, String title, String text, List<Button> buttons) {
         show(p, title, Component.text(text), buttons);
