@@ -5,6 +5,7 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.Style;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.commonmark.node.*;
@@ -18,6 +19,8 @@ import java.util.List;
 
 /** Renders parsed Markdown as styled text for a scrollable article. */
 final class Markdown {
+    private static final java.util.regex.Pattern STYLED_SPAN = java.util.regex.Pattern.compile(
+        "<span\\s+style=([\"'])(.*?)\\1\\s*>", java.util.regex.Pattern.CASE_INSENSITIVE);
     private record Run(String text, Style style) {}
     private final List<Run> runs = new ArrayList<>();
 
@@ -48,7 +51,17 @@ final class Markdown {
         runs.add(new Run(text.replace("§", ""), style));
     }
     private void children(Node parent, Style style, int depth) {
-        for (Node child = parent.getFirstChild(); child != null; child = child.getNext()) node(child, style, depth);
+        List<Style> scopes = new ArrayList<>();
+        scopes.add(style);
+        for (Node child = parent.getFirstChild(); child != null; child = child.getNext()) {
+            Style current = scopes.getLast();
+            if (child instanceof HtmlInline html) {
+                var opening = STYLED_SPAN.matcher(html.getLiteral());
+                if (opening.matches()) scopes.add(spanStyle(opening.group(2), current));
+                else if (html.getLiteral().equalsIgnoreCase("</span>") && scopes.size() > 1)
+                    scopes.removeLast();
+            } else node(child, current, depth);
+        }
     }
     private void node(Node node, Style style, int depth) {
         if (node instanceof Text n) text(n.getLiteral(), style);
@@ -113,5 +126,44 @@ final class Markdown {
         else if (node instanceof HardLineBreak) text("\n", style);
         else if (node instanceof ThematicBreak) text("────────────────\n\n", style.color(NamedTextColor.DARK_GRAY));
         else if (!(node instanceof HtmlBlock) && !(node instanceof HtmlInline)) children(node, style, depth);
+    }
+
+    /** Only visual CSS properties are accepted; spans cannot add actions or custom fonts. */
+    private static Style spanStyle(String css, Style base) {
+        Style result = base;
+        for (String declaration : css.split(";")) {
+            String[] pair = declaration.split(":", 2);
+            if (pair.length != 2) continue;
+            String value = pair[1].strip().toLowerCase(java.util.Locale.ROOT);
+            switch (pair[0].strip().toLowerCase(java.util.Locale.ROOT)) {
+                case "color" -> {
+                    TextColor color = value.startsWith("#") ? TextColor.fromHexString(value)
+                        : NamedTextColor.NAMES.value(value);
+                    if (color != null) result = result.color(color);
+                }
+                case "font-weight" -> {
+                    if (value.equals("bold") || value.equals("700")) result = result.decorate(TextDecoration.BOLD);
+                    else if (value.equals("normal") || value.equals("400")) result = result.decoration(TextDecoration.BOLD, false);
+                }
+                case "font-style" -> {
+                    if (value.equals("italic")) result = result.decorate(TextDecoration.ITALIC);
+                    else if (value.equals("normal")) result = result.decoration(TextDecoration.ITALIC, false);
+                }
+                case "text-decoration" -> {
+                    for (String decoration : value.split("\\s+")) {
+                        if (decoration.equals("underline")) result = result.decorate(TextDecoration.UNDERLINED);
+                        else if (decoration.equals("line-through")) result = result.decorate(TextDecoration.STRIKETHROUGH);
+                        else if (decoration.equals("none")) result = result
+                            .decoration(TextDecoration.UNDERLINED, false).decoration(TextDecoration.STRIKETHROUGH, false);
+                    }
+                }
+                case "--minecraft-obfuscated" -> {
+                    if (value.equals("true") || value.equals("false"))
+                        result = result.decoration(TextDecoration.OBFUSCATED, Boolean.parseBoolean(value));
+                }
+                default -> { /* Ignore unsupported CSS. */ }
+            }
+        }
+        return result;
     }
 }

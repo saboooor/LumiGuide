@@ -68,4 +68,38 @@ class MarkdownTest {
         assertTrue(bedrock.contains("§6§lHeading")); assertTrue(bedrock.contains("§lBold"));
         assertTrue(bedrock.contains("§oitalic")); assertTrue(bedrock.contains("§bcode"));
     }
+
+    @Test void rendersExplicitStylesAnywhereAndRestoresNestedScopes() {
+        var page = Markdown.render("Before <span style=\"color: #ff5555\">Red **bold** <span style=\"color: #55ff55; font-style: italic\">Green</span> Red again</span> After");
+        assertEquals(NamedTextColor.RED, text(page, "Red ").color());
+        assertEquals(NamedTextColor.RED, text(page, "bold").color());
+        assertEquals(TextDecoration.State.TRUE, text(page, "bold").decoration(TextDecoration.BOLD));
+        assertEquals(NamedTextColor.GREEN, text(page, "Green").color());
+        assertEquals(TextDecoration.State.TRUE, text(page, "Green").decoration(TextDecoration.ITALIC));
+        assertEquals(NamedTextColor.RED, text(page, " Red again").color());
+        assertEquals(NamedTextColor.WHITE, text(page, " After").color());
+        assertNull(text(page, "Green").clickEvent());
+    }
+
+    @Test void stylesTableCellsOnlyWhenExplicitlyMarked() {
+        var page = Markdown.render("| Code | Color |\n| --- | --- |\n| `&c` | Red |\n| `&a` | <span style=\"color: #55ff55\">Green</span> |");
+        assertEquals(NamedTextColor.WHITE, text(page, "Red").color());
+        assertEquals(NamedTextColor.GREEN, text(page, "Green").color());
+        assertEquals(NamedTextColor.AQUA, text(page, "&c").color());
+    }
+
+    @Test void supportsVisualStylesAndLeavesCodeLiteral() {
+        var page = Markdown.render("Samples: <span style='font-weight: bold; text-decoration: underline line-through; --minecraft-obfuscated: true; font-family: uniform; click: /op'>Sample</span> Plain\n\n`<span style=\"color: red\">literal</span>`\n\n```html\n<span style=\"color: red\">block</span>\n```");
+        var sample = text(page, "Sample");
+        for (var decoration : List.of(TextDecoration.BOLD, TextDecoration.UNDERLINED,
+                TextDecoration.STRIKETHROUGH, TextDecoration.OBFUSCATED))
+            assertEquals(TextDecoration.State.TRUE, sample.decoration(decoration));
+        assertNull(sample.clickEvent()); assertNull(sample.font());
+        assertEquals(NamedTextColor.WHITE, text(page, " Plain").color());
+        assertTrue(plain(page).contains("<span style=\"color: red\">literal</span>"));
+        assertTrue(plain(page).contains("<span style=\"color: red\">block</span>"));
+        assertTrue(Markdown.bedrock(page).contains("§k"));
+        assertFalse(Markdown.bedrock(page).contains("§n"));
+        assertFalse(Markdown.bedrock(page).contains("§m"));
+    }
 }
