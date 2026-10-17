@@ -21,8 +21,8 @@ import java.util.List;
 final class Markdown {
     private static final java.util.regex.Pattern STYLED_SPAN = java.util.regex.Pattern.compile(
         "<span\\s+style=([\"'])(.*?)\\1\\s*>", java.util.regex.Pattern.CASE_INSENSITIVE);
-    private record Run(String text, Style style, net.kyori.adventure.key.Key sprite) {
-        Run(String text, Style style) { this(text, style, null); }
+    private record Run(String text, Style style, net.kyori.adventure.key.Key sprite, boolean iconOnly) {
+        Run(String text, Style style) { this(text, style, null, false); }
     }
     private final List<Run> runs = new ArrayList<>();
 
@@ -39,15 +39,24 @@ final class Markdown {
         Markdown renderer = parse(source);
         if (renderer.runs.stream().allMatch(run -> run.text.isBlank())) return Component.text("No content yet.");
         Component content = Component.empty();
-        for (Run run : renderer.runs) content = content.append(run.sprite == null
-            ? Component.text(run.text, run.style) : ButtonIcon.label(run.sprite, run.text).style(run.style));
+        for (Run run : renderer.runs) {
+            Component part = run.sprite == null ? Component.text(run.text, run.style)
+                : ButtonIcon.label(run.sprite, run.text).style(run.style);
+            if (run.iconOnly) part = part.children(List.of()).hoverEvent(HoverEvent.showText(Component.text(run.text)));
+            content = content.append(part);
+        }
         return content;
     }
 
     /** Bedrock supports colors, bold, italics and obfuscation, but not underline/strikethrough. */
     static String bedrock(Component component) {
         var flattener = net.kyori.adventure.text.flattener.ComponentFlattener.basic().toBuilder()
-            .mapper(net.kyori.adventure.text.ObjectComponent.class, object -> "").build();
+            .mapper(net.kyori.adventure.text.ObjectComponent.class, object -> {
+                if (object.children().isEmpty() && object.hoverEvent() != null
+                    && object.hoverEvent().value() instanceof Component label)
+                    return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(label);
+                return "";
+            }).build();
         return LegacyComponentSerializer.builder().character('§').flattener(flattener).build()
             .serialize(component).replace("§n", "").replace("§m", "");
     }
@@ -129,7 +138,7 @@ final class Markdown {
         } else if (node instanceof Image image && image.getDestination().matches("minecraft:(item|block)/[a-z0-9_]+")) {
             String label = plainCell(image).replace("§", "");
             if (label.isBlank()) label = image.getDestination().substring(image.getDestination().indexOf('/') + 1).replace('_', ' ');
-            runs.add(new Run(label, style, net.kyori.adventure.key.Key.key(image.getDestination())));
+            runs.add(new Run(label, style, net.kyori.adventure.key.Key.key(image.getDestination()), "sprite-only".equals(image.getTitle())));
         } else if (node instanceof Image) {
             text("[Image: ", style.color(NamedTextColor.GRAY)); children(node, style.color(NamedTextColor.GRAY), depth); text("]", style.color(NamedTextColor.GRAY));
         } else if (node instanceof SoftLineBreak) text(" ", style);

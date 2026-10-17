@@ -87,3 +87,11 @@ Use ![Stone bricks](minecraft:block/stone_bricks) and ![Obsidian](minecraft:bloc
 Java articles show the sprite beside its label, including in lists and crafting table cells. Item textures use the appropriate server-version atlas; block textures always use the blocks atlas. Use texture names rather than Bukkit material names. Labels remain visible on Bedrock and in search/plain text, and code examples stay literal. Missing alt text falls back to the texture name. Only `minecraft:item/...` and `minecraft:block/...` identifiers with lowercase letters, digits, and underscores are accepted. Unknown texture names can display Minecraft's missing-texture sprite; ordinary image URLs retain their existing image-description behavior.
 
 The website resolves these identifiers to pixelated texture images from MCAsset Cloud's Minecraft 1.21.10 assets and keeps the label visible if an image cannot load. Add sprites directly to the shared Markdown and deploy the website; refresh the in-game feed with `/guide reload`.
+
+Add the image title `"sprite-only"` to omit the visible label while retaining a Java hover label and Bedrock text fallback:
+
+```md
+![Paper](minecraft:item/paper "sprite-only")
+```
+
+For crafting grids, write three lines of three icon-only images separated by ` | `, using Markdown hard line breaks (two spaces at each row end). Barrier sprites can mark empty slots; explain the placeholder under the grid. The shared recipe guides use this layout instead of labeled table rows.

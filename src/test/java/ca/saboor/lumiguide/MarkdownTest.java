@@ -12,6 +12,16 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class MarkdownTest {
+    @Test void rendersCraftingGridAsThreeRowsWithBedrockLabels() {
+        String row = "![Paper](minecraft:item/paper \"sprite-only\") | ![Pearl](minecraft:item/ender_pearl \"sprite-only\") | ![Paper](minecraft:item/paper \"sprite-only\")";
+        var page = Markdown.render(row + "  \n" + row + "  \n" + row);
+        var objects = leaves(page).stream().filter(c -> c instanceof net.kyori.adventure.text.ObjectComponent).toList();
+        assertEquals(9, objects.size());
+        assertTrue(objects.stream().allMatch(c -> c.children().isEmpty() && c.hoverEvent() != null));
+        assertEquals(3, Markdown.bedrock(page).strip().lines().count());
+        assertTrue(Markdown.bedrock(page).contains("Paper | Pearl | Paper"));
+        assertTrue(Markdown.plain(row).contains("Paper | Pearl | Paper"));
+    }
     @Test void rendersSpritesWithTextFallbackAndKeepsExamplesLiteral() {
         String source = "Craft ![Paper](minecraft:item/paper) with ![Obsidian](minecraft:block/obsidian).";
         var page = Markdown.render(source);
