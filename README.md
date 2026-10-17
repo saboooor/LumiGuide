@@ -94,4 +94,4 @@ Add the image title `"sprite-only"` to omit the visible label while retaining a 
 ![Paper](minecraft:item/paper "sprite-only")
 ```
 
-For crafting grids, write three lines of three icon-only images separated by ` | `, using Markdown hard line breaks (two spaces at each row end). Barrier sprites can mark empty slots; explain the placeholder under the grid. The shared recipe guides use this layout instead of labeled table rows.
+For crafting grids, write three lines of three icon-only images separated by ` | `, using Markdown hard line breaks (two spaces at each row end). Barrier sprites can mark empty slots; explain the placeholder under the grid. The shared recipe guides use this layout inside `audience:minecraft` blocks. Their `audience:website` blocks show larger SVG crafting diagrams instead.
