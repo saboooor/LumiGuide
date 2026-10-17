@@ -52,7 +52,7 @@ final class Markdown {
     }
     private void node(Node node, Style style, int depth) {
         if (node instanceof Text n) text(n.getLiteral(), style);
-        else if (node instanceof Code n) text(n.getLiteral(), style.color(NamedTextColor.AQUA).font(net.kyori.adventure.key.Key.key("minecraft:uniform")));
+        else if (node instanceof Code n) text(n.getLiteral(), style.color(NamedTextColor.AQUA));
         else if (node instanceof Strikethrough) children(node, style.decorate(TextDecoration.STRIKETHROUGH), depth);
         else if (node instanceof StrongEmphasis) children(node, style.decorate(TextDecoration.BOLD), depth);
         else if (node instanceof Emphasis) children(node, style.decorate(TextDecoration.ITALIC), depth);
@@ -73,9 +73,9 @@ final class Markdown {
             text("▎ ", style.color(NamedTextColor.GRAY));
             children(node, style.color(NamedTextColor.GRAY).decorate(TextDecoration.ITALIC), depth);
         } else if (node instanceof FencedCodeBlock n) {
-            text(n.getLiteral(), style.color(NamedTextColor.AQUA).font(net.kyori.adventure.key.Key.key("minecraft:uniform"))); text("\n", style);
+            text(n.getLiteral(), style.color(NamedTextColor.AQUA)); text("\n", style);
         } else if (node instanceof IndentedCodeBlock n) {
-            text(n.getLiteral(), style.color(NamedTextColor.AQUA).font(net.kyori.adventure.key.Key.key("minecraft:uniform"))); text("\n", style);
+            text(n.getLiteral(), style.color(NamedTextColor.AQUA)); text("\n", style);
         } else if (node instanceof TableBlock) {
             // Column widths are unpredictable in dialogs. Present each row with its column labels.
             List<String> headers = new ArrayList<>();
