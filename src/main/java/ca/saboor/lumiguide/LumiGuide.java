@@ -1,0 +1,201 @@
+package ca.saboor.lumiguide;
+
+import com.google.gson.Gson;
+import io.papermc.paper.dialog.Dialog;
+import io.papermc.paper.registry.data.dialog.*;
+import io.papermc.paper.registry.data.dialog.action.DialogAction;
+import io.papermc.paper.registry.data.dialog.body.DialogBody;
+import io.papermc.paper.registry.data.dialog.input.DialogInput;
+import io.papermc.paper.registry.data.dialog.type.DialogType;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickCallback;
+import org.bukkit.entity.Player;
+import org.bukkit.command.*;
+import org.bukkit.plugin.java.JavaPlugin;
+import java.net.URI;
+import java.net.http.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+public final class LumiGuide extends JavaPlugin {
+    record Button(net.kyori.adventure.key.Key icon, String text, Runnable action, boolean search) {
+        Button(net.kyori.adventure.key.Key icon, String text, Runnable action) { this(icon, text, action, false); }
+        Button(ButtonIcon icon, String text, Runnable action) { this(icon.sprite, text, action); }
+        Component label() { return ButtonIcon.label(icon, text); }
+    }
+    static final String SEARCH_LABEL = "Search";
+    static final String CLOSE_LABEL = "Close";
+    private Handbook.Feed feed;
+    private final AtomicBoolean fetching = new AtomicBoolean();
+    private final Gson gson = new Gson();
+    private BedrockForms bedrock;
+    private org.bukkit.scheduler.BukkitTask refreshTask;
+    private HttpClient http;
+
+    @Override public void onEnable() {
+        saveDefaultConfig();
+        http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+        bedrock = new BedrockForms(this);
+        try { feed = gson.fromJson(Files.readString(cache()), Handbook.Feed.class).checked(); }
+        catch (Exception ignored) { getLogger().info("No valid cached handbook; fetching website docs."); }
+        Objects.requireNonNull(getCommand("guide")).setExecutor(this);
+        schedule();
+    }
+    @Override public void onDisable() { if (http != null) http.shutdownNow(); }
+    private Path cache() { return getDataFolder().toPath().resolve("handbook.json"); }
+    private void schedule() {
+        if (refreshTask != null) refreshTask.cancel();
+        refreshTask = getServer().getScheduler().runTaskTimer(this, () -> refresh(null), 1,
+            Math.max(1, getConfig().getLong("refresh-minutes", 10)) * 1200);
+    }
+    private void refresh(CommandSender sender) {
+        if (!fetching.compareAndSet(false, true)) { if (sender != null) sender.sendMessage("A handbook refresh is already running."); return; }
+        String source = getConfig().getString("source", "https://luminaramc.org/api/docs/");
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                URI uri = URI.create(source);
+                if (!Set.of("https", "http").contains(uri.getScheme())) throw new IllegalArgumentException("Source must use HTTP(S)");
+                var request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(25)).header("Accept", "application/json").GET().build();
+                var response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+                String json;
+                try (var body = response.body()) {
+                    if (response.statusCode() != 200) throw new IllegalStateException("Website returned HTTP " + response.statusCode());
+                    byte[] bytes = body.readNBytes(8 * 1024 * 1024 + 1);
+                    if (bytes.length > 8 * 1024 * 1024) throw new IllegalArgumentException("Feed exceeds 8 MiB");
+                    json = new String(bytes, StandardCharsets.UTF_8);
+                }
+                Handbook.Feed loaded = gson.fromJson(json, Handbook.Feed.class).checked();
+                Path tmp = cache().resolveSibling("handbook.json.tmp");
+                Files.writeString(tmp, json);
+                Files.move(tmp, cache(), StandardCopyOption.REPLACE_EXISTING);
+                sync(() -> { feed = loaded; if (sender != null) sender.sendMessage("Loaded " + loaded.pages().size() + " handbook pages."); });
+            } catch (Exception e) {
+                getLogger().warning("Handbook refresh failed; retaining cached docs: " + e.getMessage());
+                sync(() -> { if (sender != null) sender.sendMessage("Could not refresh docs. Check the server log; cached docs remain available."); });
+            } finally { fetching.set(false); }
+        });
+    }
+    void sync(Runnable task) { if (isEnabled()) getServer().getScheduler().runTask(this, task); }
+    @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length == 1 && args[0].equalsIgnoreCase("reload")) {
+            if (!sender.hasPermission("lumiguide.reload")) { sender.sendMessage("You do not have permission to reload docs."); return true; }
+            reloadConfig(); schedule(); refresh(sender); return true;
+        }
+        if (!(sender instanceof Player player)) { sender.sendMessage("Use /guide reload from the console."); return true; }
+        if (feed == null) { player.sendMessage("The handbook is loading. Try /guide again shortly."); return true; }
+        if (args.length == 0) home(player);
+        else {
+            String query = String.join(" ", args);
+            String path = query.startsWith("/docs/") ? query : "/docs/" + query;
+            if (!path.endsWith("/")) path += "/";
+            if (feed.page(path) != null) article(player, path); else results(player, query);
+        }
+        return true;
+    }
+    private void home(Player p) { category(p, "Player handbook", feed.menu(), null, null); }
+    private void category(Player p, String title, List<Handbook.Menu> nodes, String overview, Runnable back) {
+        Runnable current = () -> category(p, title, nodes, overview, back);
+        List<Button> buttons = new ArrayList<>();
+        if (overview != null && feed.page(overview) != null) buttons.add(new Button(feed.page(overview).sprite(), "Overview", () -> article(p, overview, current)));
+        for (var n : nodes) {
+            if (n.items() != null && !n.items().isEmpty()) buttons.add(new Button(feed.page(n.href()) == null ? ButtonIcon.CATEGORY.sprite : feed.page(n.href()).sprite(), n.text(), () -> category(p, n.text(), n.items(), n.href(), current)));
+            else if (feed.page(n.href()) != null) buttons.add(new Button(feed.page(n.href()).sprite(), n.text(), () -> article(p, n.href(), current)));
+        }
+        if (back != null) buttons.add(new Button(ButtonIcon.BACK, "Back", back));
+        if (back != null) buttons.add(new Button(ButtonIcon.HANDBOOK, "Handbook", () -> home(p)));
+        show(p, title, Component.text("Choose a category or guide."), buttons, "", current);
+    }
+    private void results(Player p, String query) { results(p, query, () -> home(p)); }
+    private void results(Player p, String query, Runnable back) {
+        Runnable current = () -> results(p, query, back);
+        var matches = feed.search(query);
+        List<Button> buttons = new ArrayList<>(matches.stream()
+            .map(page -> new Button(page.sprite(), page.title(), () -> article(p, page.path(), current))).toList());
+        buttons.add(new Button(ButtonIcon.BACK, "Back", back));
+        buttons.add(new Button(ButtonIcon.HANDBOOK, "Handbook", () -> home(p)));
+        // Editing a search retains its original return destination rather than stacking results screens.
+        show(p, "Search: " + query, Component.text(matches.size() + " guides found."), buttons, query, back);
+    }
+    private void article(Player p, String path) { article(p, path, () -> home(p)); }
+    private void article(Player p, String path, Runnable back) {
+        var page = feed.page(path);
+        if (page == null) { home(p); return; }
+        Runnable current = () -> article(p, path, back);
+        List<Button> buttons = new ArrayList<>();
+        buttons.add(new Button(ButtonIcon.RELATED, "Related guides", () -> related(p, page, current)));
+        String parent = path.substring(0, Math.max(0, path.lastIndexOf('/', path.length() - 2)) + 1);
+        if (feed.page(parent) != null && !parent.equals(path)) buttons.add(new Button(feed.page(parent).sprite(), "Category overview", () -> article(p, parent, current)));
+        buttons.add(new Button(ButtonIcon.BACK, "Back", back));
+        buttons.add(new Button(ButtonIcon.HANDBOOK, "Handbook", () -> home(p)));
+        buttons.add(new Button(ButtonIcon.SEARCH, "Search", () -> home(p)));
+        show(p, page.title(), page.content(), buttons);
+    }
+    private void related(Player p, Handbook.Page page, Runnable back) {
+        Runnable current = () -> related(p, page, back);
+        List<Button> buttons = new ArrayList<>(Handbook.links(page.markdown()).stream().map(feed::page).filter(Objects::nonNull)
+            .map(target -> new Button(target.sprite(), target.title(), () -> article(p, target.path(), current))).toList());
+        boolean empty = buttons.isEmpty();
+        buttons.add(new Button(ButtonIcon.BACK, "Back to article", back));
+        show(p, "Related guides", empty ? "This article has no linked guides." : "Follow a link from this article.", buttons);
+    }
+    private void show(Player p, String title, String text, List<Button> buttons) {
+        show(p, title, Component.text(text), buttons);
+    }
+    private void show(Player p, String title, Component text, List<Button> buttons) {
+        show(p, title, text, buttons, null, () -> home(p));
+    }
+    private void show(Player p, String title, Component text, List<Button> buttons, String query, Runnable searchBack) {
+        if (!p.isOnline() || !p.hasPermission("lumiguide.use")) return;
+        List<Button> actions = new ArrayList<>(buttons);
+        if (query != null) actions.addFirst(new Button(ButtonIcon.SEARCH.sprite, SEARCH_LABEL, () -> {}, true));
+        actions.sort(Comparator.comparingInt(button ->
+            button.icon().equals(ButtonIcon.BACK.sprite) ? 0 :
+            button.icon().equals(ButtonIcon.SEARCH.sprite) ? 1 : 2));
+        if (bedrock.isBedrock(p)) {
+            if (query == null) bedrock.show(p, title, Markdown.bedrock(text), actions);
+            else bedrock.showSearch(p, title, Markdown.bedrock(text), actions, query, value -> results(p, value, searchBack));
+            return;
+        }
+        List<ActionButton> paperButtons = actions.stream().map(b -> ActionButton.create(b.label(), null, 200,
+                DialogAction.customClick((view, audience) -> {
+                    if (audience instanceof Player actor && actor.getUniqueId().equals(p.getUniqueId())) {
+                        String value = b.search() ? Objects.toString(view.getText("query"), "") : "";
+                        sync(() -> {
+                            if (actor.isOnline() && actor.hasPermission("lumiguide.use")) {
+                                if (b.search()) results(actor, value, searchBack); else b.action().run();
+                            }
+                        });
+                    }
+                }, ClickCallback.Options.builder().uses(1).build()))).toList();
+        int navigationCount = (int) actions.stream().filter(button ->
+            button.icon().equals(ButtonIcon.SEARCH.sprite) || button.icon().equals(ButtonIcon.BACK.sprite)).count();
+        p.showDialog(Dialog.create(f -> f.empty().base(DialogBase.builder(Component.text(title)).pause(false)
+            .body(List.of(DialogBody.plainMessage(text, 380)))
+            .inputs(query == null ? List.of() : List.of(DialogInput.text("query", Component.text("Search handbook"))
+                .initial(query).maxLength(100).build())).build())
+            .type(DialogType.multiAction(spacedButtons(paperButtons, navigationCount),
+                ActionButton.create(ButtonIcon.CLOSE.label(CLOSE_LABEL), null, 200, null), 2))));
+    }
+
+    private static ActionButton spacer() {
+        return ActionButton.create(Component.text(" "), null, 1, null);
+    }
+
+    private static List<ActionButton> spacedButtons(List<ActionButton> buttons, int navigationCount) {
+        List<ActionButton> spaced = new ArrayList<>();
+        // Keep Search and Back on their own row, using Best Auction's inactive spacers.
+        if (navigationCount > 0) {
+            spaced.addAll(buttons.subList(0, navigationCount));
+            if (navigationCount % 2 != 0) spaced.add(spacer());
+            spaced.add(spacer()); spaced.add(spacer());
+        }
+        for (int i = navigationCount; i < buttons.size(); i += 2) {
+            spaced.add(buttons.get(i));
+            spaced.add(i + 1 < buttons.size() ? buttons.get(i + 1) : spacer());
+        }
+        return spaced;
+    }
+}

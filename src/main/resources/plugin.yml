@@ -1,0 +1,15 @@
+name: LumiGuide
+version: 1.0.0
+main: ca.saboor.lumiguide.LumiGuide
+api-version: '1.21.10'
+softdepend: [floodgate]
+commands:
+  guide:
+    description: Browse the Luminara handbook
+    aliases: [docs, lumiguide]
+    permission: lumiguide.use
+permissions:
+  lumiguide.use:
+    default: true
+  lumiguide.reload:
+    default: op
