@@ -74,3 +74,16 @@ Use inline spans directly in a paragraph, list, or table cell to style text in t
 Supported properties are `color` (hex or a Minecraft named color), `font-weight` (`bold` / `normal`, or `700` / `400`), `font-style` (`italic` / `normal`), and `text-decoration` (`underline`, `line-through`, or `none`). Prefer hex colors for consistent website and Minecraft colors. Combine decorations with spaces. Spans can nest, and closing a span restores the surrounding style. Keep each opening and closing pair within the same paragraph or table cell; standalone HTML blocks are omitted. Inline and fenced code remain literal examples.
 
 For Minecraft magic text, use `<span style="--minecraft-obfuscated: true">Magic</span>`; this custom property has no visual effect on the website. Bedrock retains supported colors, bold, italic, and obfuscation, but cannot show underline or strikethrough. Other CSS properties are ignored in Minecraft; spans cannot add click actions or change fonts. No table headings or color-guide-specific logic controls styling.
+
+## Inline sprites in Markdown
+
+Use ordinary Markdown image syntax with a Minecraft texture identifier:
+
+```md
+Craft ![Paper](minecraft:item/paper) with an ![Ender pearl](minecraft:item/ender_pearl).
+Use ![Stone bricks](minecraft:block/stone_bricks) and ![Obsidian](minecraft:block/obsidian).
+```
+
+Java articles show the sprite beside its label, including in lists and crafting table cells. Item textures use the appropriate server-version atlas; block textures always use the blocks atlas. Use texture names rather than Bukkit material names. Labels remain visible on Bedrock and in search/plain text, and code examples stay literal. Missing alt text falls back to the texture name. Only `minecraft:item/...` and `minecraft:block/...` identifiers with lowercase letters, digits, and underscores are accepted. Unknown texture names can display Minecraft's missing-texture sprite; ordinary image URLs retain their existing image-description behavior.
+
+The website resolves these identifiers to pixelated texture images from MCAsset Cloud's Minecraft 1.21.10 assets and keeps the label visible if an image cannot load. Add sprites directly to the shared Markdown and deploy the website; refresh the in-game feed with `/guide reload`.

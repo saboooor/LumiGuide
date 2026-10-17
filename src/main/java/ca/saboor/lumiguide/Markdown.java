@@ -21,7 +21,9 @@ import java.util.List;
 final class Markdown {
     private static final java.util.regex.Pattern STYLED_SPAN = java.util.regex.Pattern.compile(
         "<span\\s+style=([\"'])(.*?)\\1\\s*>", java.util.regex.Pattern.CASE_INSENSITIVE);
-    private record Run(String text, Style style) {}
+    private record Run(String text, Style style, net.kyori.adventure.key.Key sprite) {
+        Run(String text, Style style) { this(text, style, null); }
+    }
     private final List<Run> runs = new ArrayList<>();
 
     private static Markdown parse(String source) {
@@ -37,13 +39,17 @@ final class Markdown {
         Markdown renderer = parse(source);
         if (renderer.runs.stream().allMatch(run -> run.text.isBlank())) return Component.text("No content yet.");
         Component content = Component.empty();
-        for (Run run : renderer.runs) content = content.append(Component.text(run.text, run.style));
+        for (Run run : renderer.runs) content = content.append(run.sprite == null
+            ? Component.text(run.text, run.style) : ButtonIcon.label(run.sprite, run.text).style(run.style));
         return content;
     }
 
     /** Bedrock supports colors, bold, italics and obfuscation, but not underline/strikethrough. */
     static String bedrock(Component component) {
-        return LegacyComponentSerializer.legacySection().serialize(component).replace("§n", "").replace("§m", "");
+        var flattener = net.kyori.adventure.text.flattener.ComponentFlattener.basic().toBuilder()
+            .mapper(net.kyori.adventure.text.ObjectComponent.class, object -> "").build();
+        return LegacyComponentSerializer.builder().character('§').flattener(flattener).build()
+            .serialize(component).replace("§n", "").replace("§m", "");
     }
 
     private void text(String text, Style style) {
@@ -120,12 +126,22 @@ final class Markdown {
             children(node, link, depth);
             // Bedrock form text cannot contain clickable links; retain external URLs in the body.
             if (!n.getDestination().startsWith("/docs/")) text(" (" + n.getDestination() + ")", style.color(NamedTextColor.GRAY));
+        } else if (node instanceof Image image && image.getDestination().matches("minecraft:(item|block)/[a-z0-9_]+")) {
+            String label = plainCell(image).replace("§", "");
+            if (label.isBlank()) label = image.getDestination().substring(image.getDestination().indexOf('/') + 1).replace('_', ' ');
+            runs.add(new Run(label, style, net.kyori.adventure.key.Key.key(image.getDestination())));
         } else if (node instanceof Image) {
             text("[Image: ", style.color(NamedTextColor.GRAY)); children(node, style.color(NamedTextColor.GRAY), depth); text("]", style.color(NamedTextColor.GRAY));
         } else if (node instanceof SoftLineBreak) text(" ", style);
         else if (node instanceof HardLineBreak) text("\n", style);
         else if (node instanceof ThematicBreak) text("────────────────\n\n", style.color(NamedTextColor.DARK_GRAY));
         else if (!(node instanceof HtmlBlock) && !(node instanceof HtmlInline)) children(node, style, depth);
+    }
+
+    private static String plainCell(Node node) {
+        Markdown renderer = new Markdown();
+        renderer.children(node, Style.empty(), 0);
+        return renderer.runs.stream().map(Run::text).collect(java.util.stream.Collectors.joining());
     }
 
     /** Only visual CSS properties are accepted; spans cannot add actions or custom fonts. */

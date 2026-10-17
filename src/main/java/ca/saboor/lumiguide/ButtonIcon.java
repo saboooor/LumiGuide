@@ -26,7 +26,8 @@ enum ButtonIcon {
 
     static Component label(Key sprite, String text) {
         String version = Bukkit.getServer() == null ? "1.21.10" : Bukkit.getMinecraftVersion();
-        return Component.object(ObjectContents.sprite(spriteAtlas(version), sprite))
+        return Component.object(ObjectContents.sprite(sprite.value().startsWith("block/")
+                ? Key.key("minecraft:blocks") : spriteAtlas(version), sprite))
             .append(Component.text(" " + text));
     }
 

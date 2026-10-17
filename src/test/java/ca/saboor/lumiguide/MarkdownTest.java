@@ -12,6 +12,28 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class MarkdownTest {
+    @Test void rendersSpritesWithTextFallbackAndKeepsExamplesLiteral() {
+        String source = "Craft ![Paper](minecraft:item/paper) with ![Obsidian](minecraft:block/obsidian).";
+        var page = Markdown.render(source);
+        var sprites = leaves(page).stream().filter(c -> c instanceof net.kyori.adventure.text.ObjectComponent).toList();
+        assertEquals(2, sprites.size());
+        var paper = (net.kyori.adventure.text.object.SpriteObjectContents)
+            ((net.kyori.adventure.text.ObjectComponent) sprites.get(0)).contents();
+        var obsidian = (net.kyori.adventure.text.object.SpriteObjectContents)
+            ((net.kyori.adventure.text.ObjectComponent) sprites.get(1)).contents();
+        assertEquals("minecraft:item/paper", paper.sprite().asString());
+        assertEquals("minecraft:block/obsidian", obsidian.sprite().asString());
+        assertEquals("minecraft:blocks", obsidian.atlas().asString());
+        assertEquals("Craft Paper with Obsidian.", Markdown.plain(source));
+        String bedrock = Markdown.bedrock(page);
+        assertTrue(bedrock.contains("Paper")); assertTrue(bedrock.contains("Obsidian"));
+        assertFalse(bedrock.contains("minecraft:"));
+        assertFalse(leaves(Markdown.render("`![Paper](minecraft:item/paper)`")).stream()
+            .anyMatch(c -> c instanceof net.kyori.adventure.text.ObjectComponent));
+        assertFalse(leaves(Markdown.render("![Bad](minecraft:item/../../bad)")).stream()
+            .anyMatch(c -> c instanceof net.kyori.adventure.text.ObjectComponent));
+        assertTrue(Markdown.plain("![Photo](https://example.org/photo.png)").contains("[Image: Photo]"));
+    }
     private static List<Component> leaves(Component root) {
         List<Component> result = new ArrayList<>(); result.add(root);
         root.children().forEach(child -> result.addAll(leaves(child))); return result;
