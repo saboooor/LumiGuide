@@ -42,6 +42,7 @@ public final class LumiGuide extends JavaPlugin {
         try { feed = gson.fromJson(Files.readString(cache()), Handbook.Feed.class).checked(); }
         catch (Exception ignored) { getLogger().info("No valid cached handbook; fetching website docs."); }
         Objects.requireNonNull(getCommand("guide")).setExecutor(this);
+        getServer().getPluginManager().registerEvents(new GuideItem(this), this);
         schedule();
     }
     @Override public void onDisable() { if (http != null) http.shutdownNow(); }
@@ -116,7 +117,6 @@ public final class LumiGuide extends JavaPlugin {
             else if (feed.page(n.href()) != null && !extraTargets.contains(n.href())) buttons.add(new Button(feed.page(n.href()).sprite(), n.text(), () -> article(p, n.href(), current)));
         }
         if (back != null) buttons.add(new Button(ButtonIcon.BACK, "Back", back));
-        if (back != null) buttons.add(new Button(ButtonIcon.HANDBOOK, "Handbook", () -> home(p)));
         show(p, title, Component.text("Choose a category or guide."), buttons, "", current);
     }
     private void results(Player p, String query) { results(p, query, () -> home(p)); }
@@ -126,7 +126,6 @@ public final class LumiGuide extends JavaPlugin {
         List<Button> buttons = new ArrayList<>(matches.stream()
             .map(page -> new Button(page.sprite(), page.title(), () -> article(p, page.path(), current))).toList());
         buttons.add(new Button(ButtonIcon.BACK, "Back", back));
-        buttons.add(new Button(ButtonIcon.HANDBOOK, "Handbook", () -> home(p)));
         // Editing a search retains its original return destination rather than stacking results screens.
         show(p, "Search: " + query, Component.text(matches.size() + " guides found."), buttons, query, back);
     }
@@ -141,7 +140,6 @@ public final class LumiGuide extends JavaPlugin {
         String parent = path.substring(0, Math.max(0, path.lastIndexOf('/', path.length() - 2)) + 1);
         if (feed.page(parent) != null && !parent.equals(path)) buttons.add(new Button(feed.page(parent).sprite(), "Category overview", () -> article(p, parent, current)));
         buttons.add(new Button(ButtonIcon.BACK, "Back", back));
-        buttons.add(new Button(ButtonIcon.HANDBOOK, "Handbook", () -> home(p)));
         buttons.add(new Button(ButtonIcon.SEARCH, "Search", () -> home(p)));
         show(p, page.title(), page.content(), buttons);
     }

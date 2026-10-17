@@ -14,6 +14,8 @@ Paper handbook plugin using native Java dialogs and optional Floodgate/Cumulus B
 
 ## Website contract
 
+Players receive a Player handbook book once when joining if they have `lumiguide.use`. Receipt is stored in the player's persistent data across reconnects and server restarts, so storing or losing the book does not grant another. Right-click it to open the handbook on Java or Bedrock. Full inventories are left untouched; the next join checks again until the book is successfully given. Set `join-item.enabled: false` and run `/guide reload` to disable distribution. Existing books still work. Players who received a book before receipt tracking was added receive one more on their next eligible join.
+
 `GET /api/docs/` returns `{ "version": 1, "menu": [...], "pages": [...] }`. Each menu node has `text`, optional `href`, and optional nested `items`. Each page contains `path` (canonical `/docs/.../`), `title`, optional `description`, `keywords`, `icon`, and `extra_buttons`, and `markdown` without YAML frontmatter. The endpoint bundles existing website Markdown at build time and shares the website's metadata and menu builder; docs updates become available after website deployment. No filesystem paths or remote fetch targets come from API request parameters.
 
 Set an item sprite in each Markdown file’s YAML frontmatter, for example `icon: 'minecraft:item/ender_pearl'`. The website passes this field through `/api/docs/`; guide, category, search, and related-guide buttons use it after the feed refreshes. Use vanilla item texture names (for example `minecraft:item/compass_16` for a compass), rather than material names. Redeploy the website and run `/guide reload` to refresh immediately. No plugin rebuild is needed for future icon metadata changes.

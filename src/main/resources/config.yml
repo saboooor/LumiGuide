@@ -1,3 +1,5 @@
 # The website must have the /api/docs/ endpoint deployed.
 source: https://luminaramc.org/api/docs/
 refresh-minutes: 10
+join-item:
+  enabled: true
