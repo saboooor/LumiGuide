@@ -34,6 +34,8 @@ public final class LumiGuide extends JavaPlugin {
     private BedrockForms bedrock;
     private org.bukkit.scheduler.BukkitTask refreshTask;
     private HttpClient http;
+    private DocUpdates updates = DocUpdates.empty();
+    private UpdateNotices notices;
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -41,12 +43,28 @@ public final class LumiGuide extends JavaPlugin {
         bedrock = new BedrockForms(this);
         try { feed = gson.fromJson(Files.readString(cache()), Handbook.Feed.class).checked(); }
         catch (Exception ignored) { getLogger().info("No valid cached handbook; fetching website docs."); }
+        try { updates = gson.fromJson(Files.readString(updateCache()), DocUpdates.class).checked(); }
+        catch (Exception ignored) { getLogger().info("Starting handbook update history."); }
+        if (feed != null) {
+            updates = updates.refresh(feed, System.currentTimeMillis());
+            try { saveUpdates(updates); }
+            catch (java.io.IOException e) { getLogger().warning("Could not save handbook update history: " + e.getMessage()); }
+        }
+        notices = new UpdateNotices(this);
+        getServer().getPluginManager().registerEvents(notices, this);
+        if (feed != null) notices.loaded(feed, updates);
         Objects.requireNonNull(getCommand("guide")).setExecutor(this);
         getServer().getPluginManager().registerEvents(new GuideItem(this), this);
         schedule();
     }
     @Override public void onDisable() { if (http != null) http.shutdownNow(); }
     private Path cache() { return getDataFolder().toPath().resolve("handbook.json"); }
+    private Path updateCache() { return getDataFolder().toPath().resolve("doc-updates.json"); }
+    private void saveUpdates(DocUpdates history) throws java.io.IOException {
+        Path tmp = updateCache().resolveSibling("doc-updates.json.tmp");
+        Files.writeString(tmp, gson.toJson(history));
+        Files.move(tmp, updateCache(), StandardCopyOption.REPLACE_EXISTING);
+    }
     private void schedule() {
         if (refreshTask != null) refreshTask.cancel();
         refreshTask = getServer().getScheduler().runTaskTimer(this, () -> refresh(null), 1,
@@ -55,6 +73,7 @@ public final class LumiGuide extends JavaPlugin {
     private void refresh(CommandSender sender) {
         if (!fetching.compareAndSet(false, true)) { if (sender != null) sender.sendMessage("A handbook refresh is already running."); return; }
         String source = getConfig().getString("source", "https://luminaramc.org/api/docs/");
+        DocUpdates previousUpdates = updates;
         getServer().getScheduler().runTaskAsynchronously(this, () -> {
             try {
                 URI uri = URI.create(source);
@@ -69,14 +88,26 @@ public final class LumiGuide extends JavaPlugin {
                     json = new String(bytes, StandardCharsets.UTF_8);
                 }
                 Handbook.Feed loaded = gson.fromJson(json, Handbook.Feed.class).checked();
+                DocUpdates nextUpdates = previousUpdates.refresh(loaded, System.currentTimeMillis());
                 Path tmp = cache().resolveSibling("handbook.json.tmp");
                 Files.writeString(tmp, json);
                 Files.move(tmp, cache(), StandardCopyOption.REPLACE_EXISTING);
-                sync(() -> { feed = loaded; if (sender != null) sender.sendMessage("Loaded " + loaded.pages().size() + " handbook pages."); });
+                saveUpdates(nextUpdates);
+                sync(() -> {
+                    try {
+                        feed = loaded;
+                        updates = nextUpdates;
+                        notices.loaded(feed, updates);
+                        if (sender != null) sender.sendMessage("Loaded " + loaded.pages().size() + " handbook pages.");
+                    } finally { fetching.set(false); }
+                });
             } catch (Exception e) {
                 getLogger().warning("Handbook refresh failed; retaining cached docs: " + e.getMessage());
-                sync(() -> { if (sender != null) sender.sendMessage("Could not refresh docs. Check the server log; cached docs remain available."); });
-            } finally { fetching.set(false); }
+                sync(() -> {
+                    try { if (sender != null) sender.sendMessage("Could not refresh docs. Check the server log; cached docs remain available."); }
+                    finally { fetching.set(false); }
+                });
+            }
         });
     }
     void sync(Runnable task) { if (isEnabled()) getServer().getScheduler().runTask(this, task); }
@@ -131,17 +162,27 @@ public final class LumiGuide extends JavaPlugin {
     }
     private void article(Player p, String path) { article(p, path, () -> home(p)); }
     private void article(Player p, String path, Runnable back) {
+        article(p, path, back, 0);
+    }
+    private void article(Player p, String path, Runnable back, int requestedPage) {
         var page = feed.page(path);
         if (page == null) { home(p); return; }
-        Runnable current = () -> article(p, path, back);
+        var sections = ArticlePages.split(page.markdown());
+        int index = Math.clamp(requestedPage, 0, sections.size() - 1);
+        var section = new Handbook.Page(page.path(), page.title(), page.description(), page.keywords(),
+            sections.get(index), page.icon(), page.extra_buttons());
+        Runnable current = () -> article(p, path, back, index);
         List<Button> buttons = new ArrayList<>();
-        for (var link : feed.buttons(page))
+        if (index > 0) buttons.add(new Button(ButtonIcon.PREVIOUS, "Previous page", () -> article(p, path, back, index - 1)));
+        if (index + 1 < sections.size()) buttons.add(new Button(ButtonIcon.NEXT, "Next page", () -> article(p, path, back, index + 1)));
+        for (var link : feed.buttons(section))
             buttons.add(new Button(link.icon(), link.label(), () -> article(p, link.target().path(), current)));
         String parent = path.substring(0, Math.max(0, path.lastIndexOf('/', path.length() - 2)) + 1);
         if (feed.page(parent) != null && !parent.equals(path)) buttons.add(new Button(feed.page(parent).sprite(), "Category overview", () -> article(p, parent, current)));
         buttons.add(new Button(ButtonIcon.BACK, "Back", back));
         buttons.add(new Button(ButtonIcon.SEARCH, "Search", () -> home(p)));
-        show(p, page.title(), page.content(), buttons);
+        String title = page.title() + (sections.size() > 1 ? " (" + (index + 1) + "/" + sections.size() + ")" : "");
+        show(p, title, section.content(), buttons);
     }
     private void show(Player p, String title, String text, List<Button> buttons) {
         show(p, title, Component.text(text), buttons);
@@ -157,8 +198,9 @@ public final class LumiGuide extends JavaPlugin {
             button.icon().equals(ButtonIcon.BACK.sprite) ? 0 :
             button.icon().equals(ButtonIcon.SEARCH.sprite) ? 1 : 2));
         if (bedrock.isBedrock(p)) {
-            if (query == null) bedrock.show(p, title, Markdown.bedrock(text), actions);
-            else bedrock.showSearch(p, title, Markdown.bedrock(text), actions, query, value -> results(p, value, searchBack));
+            boolean shown = query == null ? bedrock.show(p, title, Markdown.bedrock(text), actions)
+                : bedrock.showSearch(p, title, Markdown.bedrock(text), actions, query, value -> results(p, value, searchBack));
+            if (shown) notices.opened(p);
             return;
         }
         List<ActionButton> paperButtons = actions.stream().map(b -> ActionButton.create(b.label(), null, 200,
@@ -180,6 +222,7 @@ public final class LumiGuide extends JavaPlugin {
                 .initial(query).maxLength(100).build())).build())
             .type(DialogType.multiAction(spacedButtons(paperButtons, navigationCount),
                 ActionButton.create(ButtonIcon.CLOSE.label(CLOSE_LABEL), null, 200, null), 2))));
+        notices.opened(p);
     }
 
     private static ActionButton spacer() {

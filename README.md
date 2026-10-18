@@ -8,7 +8,7 @@ Paper handbook plugin using native Java dialogs and optional Floodgate/Cumulus B
 2. Deploy the new `src/routes/api/docs/index.ts` endpoint in `../Luminara/website` using the website's normal deployment process.
 3. Start the server. Configure `plugins/LumiGuide/config.yml` if your website uses a different URL.
 
-`/guide` (aliases `/docs`, `/lumiguide`) opens categories. `/guide <words>` searches titles, descriptions, keywords, and paths; `/guide travel/waystones` opens a guide directly. The main handbook, category, and results dialogs include a search field: enter a query and press Search. Results retain the query for editing. Back buttons return to the previous category, search results, or article; the main handbook has no Back button. Bedrock combines the field with an Action dropdown; select Search or a guide and press Submit. Java buttons use vanilla Minecraft item sprites, matching Lumistones, with the appropriate atlas for the server version. Bedrock forms retain plain text labels, as in Lumistones. Guide and category icons come from each page’s `icon` metadata in the API feed; missing or invalid identifiers fall back to paper. Articles display their full content in scrollable dialogs on Java and forms on Bedrock. Linked guides appear as individual buttons with their icons and titles; Back returns to the source article. Categories and search results show all entries without pagination. Markdown headings, bold, italics, strikethrough, colored code in the regular Minecraft font, numbered and nested lists, blockquotes, links, and image descriptions are rendered in-game. Tables use labeled rows to fit narrow screens. Java links have hover details and HTTP(S) links can open in the browser; internal links have corresponding guide buttons below the article. Bedrock retains colors, bold, and italics; its forms do not support clickable text, custom fonts, underline, or strikethrough. Inline styled spans support explicit color and formatting previews; other HTML is omitted. External links are displayed as text and commands are never executed from Markdown.
+`/guide` (aliases `/docs`, `/lumiguide`) opens categories. `/guide <words>` searches titles, descriptions, keywords, and paths; `/guide travel/waystones` opens a guide directly. The main handbook, category, and results dialogs include a search field: enter a query and press Search. Results retain the query for editing. Back buttons return to the previous category, search results, or article; the main handbook has no Back button. Bedrock combines the field with an Action dropdown; select Search or a guide and press Submit. Java buttons use vanilla Minecraft item sprites, matching Lumistones, with the appropriate atlas for the server version. Bedrock forms retain plain text labels, as in Lumistones. Guide and category icons come from each page’s `icon` metadata in the API feed; missing or invalid identifiers fall back to paper. Articles display their full content in scrollable dialogs on Java and forms on Bedrock unless explicit page separators are present (see below). Linked guides appear as individual buttons with their icons and titles; Back returns to the source article. Categories and search results show all entries without pagination. Markdown headings, bold, italics, strikethrough, colored code in the regular Minecraft font, numbered and nested lists, blockquotes, links, and image descriptions are rendered in-game. Tables use labeled rows to fit narrow screens. Java links have hover details and HTTP(S) links can open in the browser; internal links have corresponding guide buttons below the article. Bedrock retains colors, bold, and italics; its forms do not support clickable text, custom fonts, underline, or strikethrough. Inline styled spans support explicit color and formatting previews; other HTML is omitted. External links are displayed as text and commands are never executed from Markdown.
 
 `/guide reload` reloads configuration and refreshes the feed. `lumiguide.use` defaults to everyone; `lumiguide.reload` defaults to operators. Docs refresh every ten minutes by default. Requests run asynchronously with size limits and HTTP timeouts. A failed request preserves the last valid feed, including across restarts via `handbook.json`. A first start requires a successful website response.
 
@@ -30,6 +30,36 @@ extra_buttons:
 ```
 
 Targets must be canonical `/docs/.../` paths. Extra buttons appear before ordinary article links, replacing duplicate links to the same target. They also appear on the corresponding category dialog. The main menu keeps a Player handbook button; its text and extra buttons appear together when opened. Missing targets are skipped. Older feeds without this field continue to work.
+
+## Unread documentation updates
+
+LumiGuide tracks the last successful documentation change and a content revision for every guide in `plugins/LumiGuide/doc-updates.json`. New guides, changed Markdown, titles, icons, navigation metadata, or publication dates create an update. An unchanged feed or reordered pages do not. Content fingerprints catch multiple edits on the same day even if the author forgets to change `last_updated`.
+
+Players with `lumiguide.use` receive a chat notice shortly after joining if they have not opened the handbook since the latest changes. The notice lists each unread guide as **New** or **Updated**, with its date and a clickable command to open it. Online players are also notified when a successful feed refresh discovers changes. The same revision is announced once per session; reminders return on subsequent joins until the handbook is opened.
+
+Opening any handbook menu or article through `/guide`, its aliases, the handbook item, or a chat link acknowledges the current revision and records the opening time in the player's persistent data. This works across reconnects and restarts. A failed Bedrock form or an unavailable feed does not acknowledge anything. Previously unseen players see the current docs as new until their first successful opening.
+
+Existing website fields `date_created` and `last_updated` supply publication dates on first discovery. Missing, invalid, or future dates fall back to the detection date (UTC). Subsequent content changes use their detection date, so stale author dates do not hide updates. Failed refreshes retain the last valid history and feed; removed guides are not announced as updates. No website API change is needed.
+
+## Optional article pagination
+
+By default, articles stay in one scrollable dialog, regardless of length. To split an article, put this standalone marker on its own line, with blank lines around it:
+
+```md
+## First day
+
+Updates for the first day.
+
+{/* pagebreak */}
+
+## Second day
+
+Updates for the second day.
+```
+
+LumiGuide displays one section at a time on both Java and Bedrock, adds Previous page / Next page buttons where available, and shows the page number in the title. Back still returns to the original menu or search results; following a linked guide and going Back returns to the same article page. Related guide links come from the current section; frontmatter extra buttons remain available on every page.
+
+The MDX comment marker is invisible on the website and passes through the handbook feed unchanged. Plain Markdown sources can also use `<!-- pagebreak -->`. Markers inside code examples, lists, or quotes do not split pages, and ordinary horizontal rules (`---`) remain horizontal rules. Leading, trailing, or repeated separators do not create blank pages. No separators means no pagination controls or page counter. Deploy the updated website content and run `/guide reload` after installing the updated plugin.
 
 ## Audience-specific content
 

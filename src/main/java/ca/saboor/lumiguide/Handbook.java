@@ -5,7 +5,11 @@ import org.commonmark.node.*;
 import org.commonmark.parser.Parser;
 
 final class Handbook {
-    record Page(String path, String title, String description, String keywords, String markdown, String icon, List<ExtraButton> extra_buttons) {
+    record Page(String path, String title, String description, String keywords, String markdown, String icon, List<ExtraButton> extra_buttons,
+                String date_created, String last_updated) {
+        Page(String path, String title, String description, String keywords, String markdown, String icon, List<ExtraButton> extra_buttons) {
+            this(path, title, description, keywords, markdown, icon, extra_buttons, null, null);
+        }
         net.kyori.adventure.key.Key sprite() { return ButtonIcon.guideSprite(icon); }
         net.kyori.adventure.text.Component content() { return Markdown.render(markdown); }
     }
