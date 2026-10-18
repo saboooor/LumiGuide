@@ -31,6 +31,16 @@ extra_buttons:
 
 Targets must be canonical `/docs/.../` paths. Extra buttons appear before ordinary article links, replacing duplicate links to the same target. They also appear on the corresponding category dialog. The main menu keeps a Player handbook button; its text and extra buttons appear together when opened. Missing targets are skipped. Older feeds without this field continue to work.
 
+## Unread documentation updates
+
+LumiGuide tracks the last successful documentation change and a content revision for every guide in `plugins/LumiGuide/doc-updates.json`. New guides, changed Markdown, titles, icons, navigation metadata, or publication dates create an update. An unchanged feed or reordered pages do not. Content fingerprints catch multiple edits on the same day even if the author forgets to change `last_updated`.
+
+Players with `lumiguide.use` receive a chat notice shortly after joining if they have not opened the handbook since the latest changes. The notice lists each unread guide as **New** or **Updated**, with its date and a clickable command to open it. Online players are also notified when a successful feed refresh discovers changes. The same revision is announced once per session; reminders return on subsequent joins until the handbook is opened.
+
+Opening any handbook menu or article through `/guide`, its aliases, the handbook item, or a chat link acknowledges the current revision and records the opening time in the player's persistent data. This works across reconnects and restarts. A failed Bedrock form or an unavailable feed does not acknowledge anything. Previously unseen players see the current docs as new until their first successful opening.
+
+Existing website fields `date_created` and `last_updated` supply publication dates on first discovery. Missing, invalid, or future dates fall back to the detection date (UTC). Subsequent content changes use their detection date, so stale author dates do not hide updates. Failed refreshes retain the last valid history and feed; removed guides are not announced as updates. No website API change is needed.
+
 ## Optional article pagination
 
 By default, articles stay in one scrollable dialog, regardless of length. To split an article, put this standalone marker on its own line, with blank lines around it:

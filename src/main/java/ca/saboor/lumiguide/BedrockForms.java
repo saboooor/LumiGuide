@@ -25,7 +25,7 @@ final class BedrockForms {
         try { return (boolean) apiType.getMethod("isFloodgatePlayer", UUID.class).invoke(api, p.getUniqueId()); }
         catch (ReflectiveOperationException e) { failed(e); return false; }
     }
-    void show(Player p, String title, String content, List<LumiGuide.Button> buttons) {
+    boolean show(Player p, String title, String content, List<LumiGuide.Button> buttons) {
         try {
             var form = type("org.geysermc.cumulus.form.SimpleForm");
             var builderType = type(form.getName() + "$Builder");
@@ -40,10 +40,10 @@ final class BedrockForms {
                     if (index >= 0 && index < buttons.size()) run(p, buttons.get(index).action());
                 } catch (ReflectiveOperationException e) { failed(e); }
             };
-            send(p, builder, callback);
-        } catch (ReflectiveOperationException | LinkageError | RuntimeException e) { failed(e); fallback(p); }
+            return send(p, builder, callback);
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException e) { failed(e); fallback(p); return false; }
     }
-    void showSearch(Player p, String title, String content, List<LumiGuide.Button> buttons,
+    boolean showSearch(Player p, String title, String content, List<LumiGuide.Button> buttons,
                     String query, Consumer<String> search) {
         try {
             // Bedrock custom forms combine inputs with an action dropdown and Submit.
@@ -70,12 +70,14 @@ final class BedrockForms {
                     run(p, () -> { if (button.search()) search.accept(bounded); else button.action().run(); });
                 } catch (ReflectiveOperationException e) { failed(e); }
             };
-            send(p, builder, callback);
-        } catch (ReflectiveOperationException | LinkageError | RuntimeException e) { failed(e); fallback(p); }
+            return send(p, builder, callback);
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException e) { failed(e); fallback(p); return false; }
     }
-    private void send(Player p, Object builder, Consumer<Object> callback) throws ReflectiveOperationException {
+    private boolean send(Player p, Object builder, Consumer<Object> callback) throws ReflectiveOperationException {
         generic().getMethod("validResultHandler", Consumer.class).invoke(builder, callback);
-        if (!(boolean) apiType.getMethod("sendForm", UUID.class, generic()).invoke(api, p.getUniqueId(), builder)) fallback(p);
+        boolean sent = (boolean) apiType.getMethod("sendForm", UUID.class, generic()).invoke(api, p.getUniqueId(), builder);
+        if (!sent) fallback(p);
+        return sent;
     }
     private void run(Player p, Runnable action) { plugin.sync(() -> { if (p.isOnline() && p.hasPermission("lumiguide.use")) action.run(); }); }
     private Class<?> generic() throws ClassNotFoundException { return type("org.geysermc.cumulus.form.util.FormBuilder"); }
