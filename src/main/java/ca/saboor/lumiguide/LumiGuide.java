@@ -131,17 +131,27 @@ public final class LumiGuide extends JavaPlugin {
     }
     private void article(Player p, String path) { article(p, path, () -> home(p)); }
     private void article(Player p, String path, Runnable back) {
+        article(p, path, back, 0);
+    }
+    private void article(Player p, String path, Runnable back, int requestedPage) {
         var page = feed.page(path);
         if (page == null) { home(p); return; }
-        Runnable current = () -> article(p, path, back);
+        var sections = ArticlePages.split(page.markdown());
+        int index = Math.clamp(requestedPage, 0, sections.size() - 1);
+        var section = new Handbook.Page(page.path(), page.title(), page.description(), page.keywords(),
+            sections.get(index), page.icon(), page.extra_buttons());
+        Runnable current = () -> article(p, path, back, index);
         List<Button> buttons = new ArrayList<>();
-        for (var link : feed.buttons(page))
+        if (index > 0) buttons.add(new Button(ButtonIcon.PREVIOUS, "Previous page", () -> article(p, path, back, index - 1)));
+        if (index + 1 < sections.size()) buttons.add(new Button(ButtonIcon.NEXT, "Next page", () -> article(p, path, back, index + 1)));
+        for (var link : feed.buttons(section))
             buttons.add(new Button(link.icon(), link.label(), () -> article(p, link.target().path(), current)));
         String parent = path.substring(0, Math.max(0, path.lastIndexOf('/', path.length() - 2)) + 1);
         if (feed.page(parent) != null && !parent.equals(path)) buttons.add(new Button(feed.page(parent).sprite(), "Category overview", () -> article(p, parent, current)));
         buttons.add(new Button(ButtonIcon.BACK, "Back", back));
         buttons.add(new Button(ButtonIcon.SEARCH, "Search", () -> home(p)));
-        show(p, page.title(), page.content(), buttons);
+        String title = page.title() + (sections.size() > 1 ? " (" + (index + 1) + "/" + sections.size() + ")" : "");
+        show(p, title, section.content(), buttons);
     }
     private void show(Player p, String title, String text, List<Button> buttons) {
         show(p, title, Component.text(text), buttons);

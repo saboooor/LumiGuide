@@ -8,7 +8,8 @@ import org.bukkit.Bukkit;
 /** Vanilla item sprites, using the same atlas selection as Lumistones. */
 enum ButtonIcon {
     GUIDE("paper"), CATEGORY("map"), SEARCH("spyglass"), HANDBOOK("book"),
-    RELATED("ender_pearl"), BACK("arrow"), CLOSE("barrier");
+    RELATED("ender_pearl"), BACK("arrow"), CLOSE("barrier"),
+    PREVIOUS("spectral_arrow"), NEXT("spectral_arrow");
 
     final Key sprite;
 
