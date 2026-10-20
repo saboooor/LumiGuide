@@ -56,6 +56,7 @@ public final class LumiGuide extends JavaPlugin {
         Objects.requireNonNull(getCommand("guide")).setExecutor(this);
         getServer().getPluginManager().registerEvents(new GuideItem(this), this);
         schedule();
+        refresh(null);
     }
     @Override public void onDisable() { if (http != null) http.shutdownNow(); }
     private Path cache() { return getDataFolder().toPath().resolve("handbook.json"); }
@@ -67,8 +68,8 @@ public final class LumiGuide extends JavaPlugin {
     }
     private void schedule() {
         if (refreshTask != null) refreshTask.cancel();
-        refreshTask = getServer().getScheduler().runTaskTimer(this, () -> refresh(null), 1,
-            Math.max(1, getConfig().getLong("refresh-minutes", 10)) * 1200);
+        long interval = Math.max(1, getConfig().getLong("refresh-minutes", 10)) * 1200;
+        refreshTask = getServer().getScheduler().runTaskTimer(this, () -> refresh(null), interval, interval);
     }
     private void refresh(CommandSender sender) {
         if (!fetching.compareAndSet(false, true)) { if (sender != null) sender.sendMessage("A handbook refresh is already running."); return; }
@@ -112,11 +113,15 @@ public final class LumiGuide extends JavaPlugin {
     }
     void sync(Runnable task) { if (isEnabled()) getServer().getScheduler().runTask(this, task); }
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length == 1 && args[0].equalsIgnoreCase("fetch")) {
+            if (!sender.hasPermission("lumiguide.fetch")) { sender.sendMessage("You do not have permission to fetch docs."); return true; }
+            refresh(sender); return true;
+        }
         if (args.length == 1 && args[0].equalsIgnoreCase("reload")) {
             if (!sender.hasPermission("lumiguide.reload")) { sender.sendMessage("You do not have permission to reload docs."); return true; }
             reloadConfig(); schedule(); refresh(sender); return true;
         }
-        if (!(sender instanceof Player player)) { sender.sendMessage("Use /guide reload from the console."); return true; }
+        if (!(sender instanceof Player player)) { sender.sendMessage("Use /guide fetch or /guide reload from the console."); return true; }
         if (feed == null) { player.sendMessage("The handbook is loading. Try /guide again shortly."); return true; }
         if (args.length == 0) home(player);
         else {

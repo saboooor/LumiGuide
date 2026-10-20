@@ -13,3 +13,5 @@ permissions:
     default: true
   lumiguide.reload:
     default: op
+  lumiguide.fetch:
+    default: op
